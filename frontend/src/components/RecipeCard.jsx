@@ -4,8 +4,15 @@ import { Link } from 'react-router-dom';
 const RecipeCard = ({ recipe, canMake }) => {
   const totalTime = (recipe.prep_time || 0) + (recipe.cook_time || 0);
   
+  // Check if recipe is vegan (from backend or check ingredients)
+  const isVegan = recipe.is_vegan || (
+    recipe.ingredients && recipe.ingredients.length > 0 
+      ? recipe.ingredients.every(ing => ing.vegan === true)
+      : false
+  );
+  
   return (
-    <Link to={`/recipes/${recipe.id}`} className="card hover:shadow-lg transition-all group">
+    <Link to={`/recipes/${recipe.id}`} className="card hover:shadow-lg transition-all group relative">
       <div className="flex items-start justify-between mb-4">
         <div className="flex items-center space-x-3">
           <div className="bg-primary-100 p-3 rounded-lg">
@@ -72,6 +79,15 @@ const RecipeCard = ({ recipe, canMake }) => {
               </span>
             )}
           </div>
+        </div>
+      )}
+      
+      {/* Vegan Badge */}
+      {isVegan && (
+        <div className="absolute bottom-4 right-4">
+          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-green-100 text-green-700 border border-green-200 shadow-sm">
+            🌱 VEGANO
+          </span>
         </div>
       )}
     </Link>

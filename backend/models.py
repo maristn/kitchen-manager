@@ -51,6 +51,7 @@ class Recipe(db.Model):
     servings = db.Column(db.Integer, default=1)  # Porções padrão
     prep_time = db.Column(db.Integer)  # Minutos
     cook_time = db.Column(db.Integer)  # Minutos
+    emoji = db.Column(db.String(10), default='🍽️')  # Emoji representativo da receita
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
@@ -66,6 +67,7 @@ class Recipe(db.Model):
             'servings': self.servings,
             'prep_time': self.prep_time,
             'cook_time': self.cook_time,
+            'emoji': self.emoji or '🍽️',
             'created_at': self.created_at.isoformat(),
             'updated_at': self.updated_at.isoformat()
         }
@@ -109,7 +111,8 @@ class RecipeIngredient(db.Model):
             'ingredient_name': self.ingredient.name if self.ingredient else None,
             'quantity_needed': self.quantity_needed,
             'unit': self.unit,
-            'available_quantity': self.ingredient.quantity if self.ingredient else 0
+            'available_quantity': self.ingredient.quantity if self.ingredient else 0,
+            'vegan': self.ingredient.vegan if self.ingredient else False
         }
 
 

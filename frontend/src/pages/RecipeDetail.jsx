@@ -349,11 +349,14 @@ const RecipeDetail = () => {
         title="Editar Receita"
         size="lg"
       >
-        <RecipeForm
-          recipe={recipe}
-          onSubmit={handleUpdate}
-          onCancel={() => setShowEditModal(false)}
-        />
+        {showEditModal && recipe && (
+          <RecipeForm
+            key={recipe.id}
+            recipe={recipe}
+            onSubmit={handleUpdate}
+            onCancel={() => setShowEditModal(false)}
+          />
+        )}
       </Modal>
     </div>
   );
