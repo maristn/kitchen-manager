@@ -8,46 +8,77 @@ from app import create_app
 from models import db, Ingredient, Recipe, RecipeIngredient
 from datetime import datetime, timedelta
 
-def seed_database():
-    """Popula o banco com dados de exemplo"""
+def seed_database(clear_existing=False):
+    """Popula o banco com dados de exemplo
+    
+    Args:
+        clear_existing: Se True, limpa todos os dados antes de popular.
+                       Se False (padrão), preserva receitas e ingredientes existentes.
+    """
     app = create_app()
     
     with app.app_context():
-        # Limpar dados existentes
-        print("Limpando dados existentes...")
-        db.session.query(RecipeIngredient).delete()
-        db.session.query(Recipe).delete()
-        db.session.query(Ingredient).delete()
-        db.session.commit()
+        if clear_existing:
+            # Limpar dados existentes APENAS se explicitamente solicitado
+            print("⚠️  ATENÇÃO: Limpando TODOS os dados existentes...")
+            db.session.query(RecipeIngredient).delete()
+            db.session.query(Recipe).delete()
+            db.session.query(Ingredient).delete()
+            db.session.commit()
+        else:
+            print("📝 Modo preservação: receitas e ingredientes existentes serão mantidos")
+            print("   (Use seed_database(clear_existing=True) para limpar tudo)")
         
-        print("Criando ingredientes...")
+        print("\nCriando/adicionando ingredientes...")
         
-        # Ingredientes
-        ingredients = [
-            Ingredient(name='Água', quantity=999999, unit='L', category='Líquidos', location='Despensa', emoji='💧', vegan=True, unlimited=True),
-            Ingredient(name='Arroz', quantity=500, unit='g', category='Grãos', location='Despensa', emoji='🍚', vegan=True),
-            Ingredient(name='Feijão', quantity=300, unit='g', category='Grãos', location='Despensa', emoji='🫘', vegan=True),
-            Ingredient(name='Tomate', quantity=400, unit='g', category='Vegetais', location='Geladeira', emoji='🍅', vegan=True),
-            Ingredient(name='Cebola', quantity=200, unit='g', category='Vegetais', location='Despensa', emoji='🧅', vegan=True),
-            Ingredient(name='Alho', quantity=50, unit='g', category='Temperos', location='Despensa', emoji='🧄', vegan=True),
-            Ingredient(name='Azeite', quantity=500, unit='ml', category='Óleos', location='Despensa', emoji='🫒', vegan=True),
-            Ingredient(name='Sal', quantity=1000, unit='g', category='Temperos', location='Despensa', emoji='🧂', vegan=True, unlimited=False),
-            Ingredient(name='Macarrão', quantity=300, unit='g', category='Massas', location='Despensa', emoji='🍝', vegan=True),
-            Ingredient(name='Molho de Tomate', quantity=250, unit='ml', category='Molhos', location='Despensa', emoji='🥫', vegan=True),
-            Ingredient(name='Ovos', quantity=6, unit='unidade(s)', category='Proteínas', location='Geladeira', emoji='🥚', vegan=False),
-            Ingredient(name='Leite', quantity=500, unit='ml', category='Laticínios', location='Geladeira', emoji='🥛', vegan=False),
-            Ingredient(name='Farinha de Trigo', quantity=800, unit='g', category='Farinhas', location='Despensa', emoji='🌾', vegan=True),
-            Ingredient(name='Açúcar', quantity=600, unit='g', category='Doces', location='Despensa', emoji='🍬', vegan=True),
-            Ingredient(name='Manteiga', quantity=150, unit='g', category='Laticínios', location='Geladeira', emoji='🧈', vegan=False),
+        # Ingredientes (como dicionários para facilitar verificação)
+        ingredients_data = [
+            {'name': 'Água', 'quantity': 999999, 'unit': 'L', 'category': 'Líquidos', 'location': 'Despensa', 'emoji': '💧', 'vegan': True, 'unlimited': True},
+            {'name': 'Arroz', 'quantity': 500, 'unit': 'g', 'category': 'Grãos', 'location': 'Despensa', 'emoji': '🍚', 'vegan': True},
+            {'name': 'Feijão', 'quantity': 300, 'unit': 'g', 'category': 'Grãos', 'location': 'Despensa', 'emoji': '🫘', 'vegan': True},
+            {'name': 'Tomate', 'quantity': 400, 'unit': 'g', 'category': 'Vegetais', 'location': 'Geladeira', 'emoji': '🍅', 'vegan': True},
+            {'name': 'Cebola', 'quantity': 200, 'unit': 'g', 'category': 'Vegetais', 'location': 'Despensa', 'emoji': '🧅', 'vegan': True},
+            {'name': 'Alho', 'quantity': 50, 'unit': 'g', 'category': 'Temperos', 'location': 'Despensa', 'emoji': '🧄', 'vegan': True},
+            {'name': 'Azeite', 'quantity': 500, 'unit': 'ml', 'category': 'Óleos', 'location': 'Despensa', 'emoji': '🫒', 'vegan': True},
+            {'name': 'Sal', 'quantity': 1000, 'unit': 'g', 'category': 'Temperos', 'location': 'Despensa', 'emoji': '🧂', 'vegan': True, 'unlimited': False},
+            {'name': 'Macarrão', 'quantity': 300, 'unit': 'g', 'category': 'Massas', 'location': 'Despensa', 'emoji': '🍝', 'vegan': True},
+            {'name': 'Molho de Tomate', 'quantity': 250, 'unit': 'ml', 'category': 'Molhos', 'location': 'Despensa', 'emoji': '🥫', 'vegan': True},
+            {'name': 'Ovos', 'quantity': 6, 'unit': 'unidade(s)', 'category': 'Proteínas', 'location': 'Geladeira', 'emoji': '🥚', 'vegan': False},
+            {'name': 'Leite', 'quantity': 500, 'unit': 'ml', 'category': 'Laticínios', 'location': 'Geladeira', 'emoji': '🥛', 'vegan': False},
+            {'name': 'Farinha de Trigo', 'quantity': 800, 'unit': 'g', 'category': 'Farinhas', 'location': 'Despensa', 'emoji': '🌾', 'vegan': True},
+            {'name': 'Açúcar', 'quantity': 600, 'unit': 'g', 'category': 'Doces', 'location': 'Despensa', 'emoji': '🍬', 'vegan': True},
+            {'name': 'Manteiga', 'quantity': 150, 'unit': 'g', 'category': 'Laticínios', 'location': 'Geladeira', 'emoji': '🧈', 'vegan': False},
         ]
         
-        for ing in ingredients:
-            db.session.add(ing)
+        created_count = 0
+        skipped_count = 0
+        
+        for ing_data in ingredients_data:
+            # Verificar se ingrediente já existe
+            existing = Ingredient.query.filter_by(name=ing_data['name']).first()
+            if existing:
+                skipped_count += 1
+                print(f"  ⏭️  {ing_data['name']} já existe, pulando...")
+            else:
+                ing = Ingredient(**ing_data)
+                db.session.add(ing)
+                created_count += 1
         
         db.session.commit()
-        print(f"✓ {len(ingredients)} ingredientes criados!")
+        print(f"✓ {created_count} ingredientes criados!")
+        if skipped_count > 0:
+            print(f"  ⏭️  {skipped_count} ingredientes já existiam e foram preservados")
         
-        print("\nCriando receitas...")
+        print("\nCriando/adicionando receitas de exemplo...")
+        
+        # Verificar receitas existentes
+        existing_recipes = Recipe.query.all()
+        if existing_recipes and not clear_existing:
+            print(f"  ⚠️  {len(existing_recipes)} receitas já existem e serão preservadas")
+            print("  (Use seed_database(clear_existing=True) para substituir)")
+            skip_recipes = True
+        else:
+            skip_recipes = False
         
         # Receitas
         recipes_data = [
@@ -123,38 +154,55 @@ def seed_database():
             },
         ]
         
-        for recipe_data in recipes_data:
-            recipe = Recipe(
-                name=recipe_data['name'],
-                servings=recipe_data['servings'],
-                prep_time=recipe_data['prep_time'],
-                cook_time=recipe_data['cook_time'],
-                instructions=recipe_data['instructions']
-            )
-            db.session.add(recipe)
-            db.session.flush()  # Para obter o ID da receita
+        if skip_recipes:
+            print("  ⏭️  Pulando criação de receitas (receitas existentes preservadas)")
+            recipes_created = 0
+        else:
+            recipes_created = 0
+            for recipe_data in recipes_data:
+                # Verificar se receita já existe
+                existing_recipe = Recipe.query.filter_by(name=recipe_data['name']).first()
+                if existing_recipe:
+                    print(f"  ⏭️  Receita '{recipe_data['name']}' já existe, pulando...")
+                    continue
+                
+                recipe = Recipe(
+                    name=recipe_data['name'],
+                    servings=recipe_data['servings'],
+                    prep_time=recipe_data['prep_time'],
+                    cook_time=recipe_data['cook_time'],
+                    instructions=recipe_data['instructions']
+                )
+                db.session.add(recipe)
+                db.session.flush()  # Para obter o ID da receita
+                
+                # Adicionar ingredientes à receita
+                for ing_name, qty, unit in recipe_data['ingredients']:
+                    ingredient = db.session.query(Ingredient).filter_by(name=ing_name).first()
+                    if ingredient:
+                        recipe_ing = RecipeIngredient(
+                            recipe_id=recipe.id,
+                            ingredient_id=ingredient.id,
+                            quantity_needed=qty,
+                            unit=unit
+                        )
+                        db.session.add(recipe_ing)
+                
+                recipes_created += 1
             
-            # Adicionar ingredientes à receita
-            for ing_name, qty, unit in recipe_data['ingredients']:
-                ingredient = db.session.query(Ingredient).filter_by(name=ing_name).first()
-                if ingredient:
-                    recipe_ing = RecipeIngredient(
-                        recipe_id=recipe.id,
-                        ingredient_id=ingredient.id,
-                        quantity_needed=qty,
-                        unit=unit
-                    )
-                    db.session.add(recipe_ing)
-        
-        db.session.commit()
-        print(f"✓ {len(recipes_data)} receitas criadas!")
+            db.session.commit()
+            print(f"✓ {recipes_created} receitas criadas!")
         
         print("\n" + "="*60)
-        print("✓ Banco de dados populado com sucesso!")
+        print("✓ Processo concluído!")
         print("="*60)
         print("\nResumo:")
-        print(f"  - {len(ingredients)} ingredientes")
-        print(f"  - {len(recipes_data)} receitas")
+        print(f"  - {created_count} ingredientes criados")
+        if skipped_count > 0:
+            print(f"  - {skipped_count} ingredientes já existiam")
+        print(f"  - {recipes_created} receitas criadas")
+        if skip_recipes:
+            print(f"  - Receitas existentes foram preservadas")
         print("\nAcesse http://localhost:5173 para ver!")
 
 if __name__ == '__main__':

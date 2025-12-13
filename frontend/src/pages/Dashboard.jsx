@@ -3,11 +3,15 @@ import { Link } from 'react-router-dom';
 import {
   ChefHat,
   ShoppingCart,
-  Check
+  Check,
+  Snowflake,
+  AlertTriangle,
+  Calendar
 } from 'lucide-react';
 import {
   ingredientsAPI,
-  recipesAPI
+  recipesAPI,
+  frozenMealsAPI
 } from '../services/api';
 import Alert from '../components/Alert';
 
@@ -17,6 +21,8 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const [selectedRecipes, setSelectedRecipes] = useState([]);
   const [shoppingList, setShoppingList] = useState([]);
+  const [frozenMeals, setFrozenMeals] = useState([]);
+  const [frozenStats, setFrozenStats] = useState(null);
   const [alert, setAlert] = useState(null);
   
   useEffect(() => {
@@ -29,14 +35,18 @@ const Dashboard = () => {
   
   const loadDashboardData = async () => {
     try {
-      // Load all recipes and ingredients
-      const [recipesRes, ingredientsRes] = await Promise.all([
+      // Load all recipes, ingredients, and frozen meals
+      const [recipesRes, ingredientsRes, frozenRes, statsRes] = await Promise.all([
         recipesAPI.getAll(),
-        ingredientsAPI.getAll()
+        ingredientsAPI.getAll(),
+        frozenMealsAPI.getAll('frozen', false),
+        frozenMealsAPI.getStats()
       ]);
       
       setAllRecipes(recipesRes.data);
       setAllIngredients(ingredientsRes.data);
+      setFrozenMeals(frozenRes.data);
+      setFrozenStats(statsRes.data);
       setLoading(false);
     } catch (error) {
       console.error('Error loading dashboard:', error);
@@ -259,6 +269,214 @@ const Dashboard = () => {
                 </div>
               );
             })}
+          </div>
+        )}
+      </div>
+      
+      {/* REFEIÇÕES CONGELADAS SECTION */}
+      <div className="mb-8">
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h2 className="text-2xl font-bold text-gray-900">
+              🧊 Refeições Congeladas
+            </h2>
+            <p className="text-sm text-gray-600 mt-1">
+              {frozenStats 
+                ? `${frozenStats.total_remaining} porções disponíveis em ${frozenStats.frozen_count} receita(s)`
+                : 'Nenhuma refeição congelada'
+              }
+            </p>
+          </div>
+        </div>
+        
+        {frozenStats && frozenStats.total_meals === 0 ? (
+          <div className="card text-center py-12 bg-blue-50/50 border-2 border-blue-200">
+            <Snowflake className="w-16 h-16 text-blue-300 mx-auto mb-4" />
+            <h3 className="text-lg font-semibold text-blue-900 mb-2">
+              Nenhuma refeição congelada
+            </h3>
+            <p className="text-blue-700 mb-6">
+              Quando você congelar porções de receitas, elas aparecerão aqui
+            </p>
+            <p className="text-sm text-blue-600">
+              💡 Dica: Vá até uma receita e use o botão "Congelar Porções"
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {/* Estatísticas rápidas */}
+            {frozenStats && (
+              <div className="grid grid-cols-4 gap-4 mb-6">
+                <div className="card text-center py-4">
+                  <div className="text-2xl font-bold text-gray-900">{frozenStats.total_remaining}</div>
+                  <div className="text-sm text-gray-600">Porções Disponíveis</div>
+                </div>
+                <div className="card text-center py-4">
+                  <div className="text-2xl font-bold text-blue-600">{frozenStats.frozen_count}</div>
+                  <div className="text-sm text-gray-600">Receitas Congeladas</div>
+                </div>
+                <div className="card text-center py-4">
+                  <div className="text-2xl font-bold text-green-600">{frozenStats.total_consumed}</div>
+                  <div className="text-sm text-gray-600">Porções Consumidas</div>
+                </div>
+                <div className={`card text-center py-4 ${frozenStats.expired_count > 0 ? 'bg-red-50 border-red-200' : ''}`}>
+                  <div className={`text-2xl font-bold ${frozenStats.expired_count > 0 ? 'text-red-600' : 'text-gray-900'}`}>
+                    {frozenStats.expired_count}
+                  </div>
+                  <div className="text-sm text-gray-600">Vencidas</div>
+                </div>
+              </div>
+            )}
+            
+            {/* Lista de refeições congeladas - Agrupadas por receita */}
+            {frozenMeals.length === 0 ? (
+              <div className="card text-center py-8">
+                <p className="text-gray-600">Nenhuma refeição congelada disponível</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {(() => {
+                  // Agrupar por receita
+                  const groupedByRecipe = {};
+                  frozenMeals.forEach(meal => {
+                    if (!groupedByRecipe[meal.recipe_id]) {
+                      groupedByRecipe[meal.recipe_id] = {
+                        recipe_id: meal.recipe_id,
+                        recipe_name: meal.recipe_name,
+                        recipe_emoji: meal.recipe_emoji || '🍽️',
+                        meals: [],
+                        total_portions: 0,
+                        total_remaining: 0,
+                        has_expired: false,
+                        expiring_soon: false,
+                        earliest_expiry: null,
+                        measures: new Set()
+                      };
+                    }
+                    groupedByRecipe[meal.recipe_id].meals.push(meal);
+                    groupedByRecipe[meal.recipe_id].total_portions += meal.portions;
+                    groupedByRecipe[meal.recipe_id].total_remaining += meal.remaining_portions;
+                    if (meal.measure) {
+                      groupedByRecipe[meal.recipe_id].measures.add(meal.measure);
+                    }
+                    if (meal.is_expired) groupedByRecipe[meal.recipe_id].has_expired = true;
+                    if (meal.days_until_expiry !== null && meal.days_until_expiry <= 7 && meal.days_until_expiry > 0) {
+                      groupedByRecipe[meal.recipe_id].expiring_soon = true;
+                    }
+                    if (meal.expiry_date) {
+                      const expiry = new Date(meal.expiry_date);
+                      if (!groupedByRecipe[meal.recipe_id].earliest_expiry || expiry < groupedByRecipe[meal.recipe_id].earliest_expiry) {
+                        groupedByRecipe[meal.recipe_id].earliest_expiry = expiry;
+                      }
+                    }
+                  });
+                  
+                  // Converter Set para Array e determinar medida principal
+                  Object.values(groupedByRecipe).forEach(group => {
+                    group.measuresArray = Array.from(group.measures);
+                    // Se todos têm a mesma medida, usar ela. Senão, usar a primeira ou "unidades"
+                    group.mainMeasure = group.measuresArray.length === 1 
+                      ? group.measuresArray[0] 
+                      : (group.measuresArray[0] || 'unidades');
+                  });
+                  
+                  return Object.values(groupedByRecipe).map((group) => {
+                    const isExpired = group.has_expired;
+                    const isExpiringSoon = group.expiring_soon && !isExpired;
+                    const batchCount = group.meals.length;
+                    
+                    return (
+                      <div
+                        key={group.recipe_id}
+                        className={`card border-2 ${
+                          isExpired 
+                            ? 'border-red-300 bg-red-50' 
+                            : isExpiringSoon 
+                              ? 'border-yellow-300 bg-yellow-50' 
+                              : 'border-blue-200 bg-white'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between mb-3">
+                          <div className="flex items-center space-x-3">
+                            <div className="text-3xl">{group.recipe_emoji}</div>
+                            <div>
+                            <h3 className="font-semibold text-gray-900">{group.recipe_name}</h3>
+                            <p className="text-sm text-gray-600">
+                              {group.total_remaining} de {group.total_portions} {group.mainMeasure}
+                              {batchCount > 1 && (
+                                <span className="ml-2 text-xs text-gray-500">
+                                  ({batchCount} lotes)
+                                </span>
+                              )}
+                            </p>
+                            </div>
+                          </div>
+                          {isExpired && (
+                            <AlertTriangle className="w-5 h-5 text-red-500" />
+                          )}
+                          {isExpiringSoon && !isExpired && (
+                            <AlertTriangle className="w-5 h-5 text-yellow-500" />
+                          )}
+                        </div>
+                        
+                        <div className="space-y-2 text-sm">
+                          {group.earliest_expiry && (
+                            <div className={`flex items-center justify-between ${
+                              isExpired ? 'text-red-700' : isExpiringSoon ? 'text-yellow-700' : 'text-gray-600'
+                            }`}>
+                              <span>Próxima validade:</span>
+                              <span className={`font-medium ${
+                                isExpired ? 'text-red-700' : isExpiringSoon ? 'text-yellow-700' : 'text-gray-900'
+                              }`}>
+                                {group.earliest_expiry.toLocaleDateString('pt-BR')}
+                              </span>
+                            </div>
+                          )}
+                          
+                          {batchCount > 1 && (
+                            <div className="pt-2 border-t border-gray-200">
+                              <p className="text-xs text-gray-600">
+                                {batchCount} lote(s) congelado(s) desta receita
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                        
+                        <div className="mt-4 pt-4 border-t border-gray-200">
+                          <Link
+                            to={`/recipes/${group.recipe_id}`}
+                            className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+                          >
+                            Gerenciar porções →
+                          </Link>
+                        </div>
+                      </div>
+                    );
+                  });
+                })()}
+              </div>
+            )}
+            
+            {/* Alertas de vencimento */}
+            {frozenStats && frozenStats.expiring_soon_count > 0 && (
+              <div className="card bg-yellow-50 border-2 border-yellow-200 mt-4">
+                <div className="flex items-start space-x-3">
+                  <AlertTriangle className="w-5 h-5 text-yellow-600 mt-0.5" />
+                  <div>
+                    <h4 className="font-semibold text-yellow-900 mb-2">
+                      Atenção: {frozenStats.expiring_soon_count} refeição(ões) vencendo em breve
+                    </h4>
+                    <div className="space-y-1">
+                      {frozenStats.expiring_soon.slice(0, 3).map((meal) => (
+                        <div key={meal.id} className="text-sm text-yellow-800">
+                          • {meal.recipe_name}: {meal.days_until_expiry} dias restantes
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>

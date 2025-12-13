@@ -149,12 +149,33 @@ def update_ingredient(id):
 
 @ingredients_bp.route('/ingredients/<int:id>', methods=['DELETE'])
 def delete_ingredient(id):
-    """Deletar ingrediente"""
+    """Deletar ingrediente (preserva receitas, apenas remove o relacionamento)"""
     try:
+        from models import RecipeIngredient
+        
         ingredient = Ingredient.query.get_or_404(id)
-        db.session.delete(ingredient)
-        db.session.commit()
-        return jsonify({'message': 'Ingrediente deletado com sucesso'}), 200
+        
+        # Verificar se há receitas usando este ingrediente
+        recipe_ingredients = RecipeIngredient.query.filter_by(ingredient_id=id).all()
+        recipes_using = set()
+        for ri in recipe_ingredients:
+            if ri.recipe:
+                recipes_using.add(ri.recipe.name)
+        
+        if recipes_using:
+            # Remover apenas os relacionamentos, não o ingrediente
+            RecipeIngredient.query.filter_by(ingredient_id=id).delete()
+            db.session.commit()
+            return jsonify({
+                'message': f'Ingrediente removido das receitas. Receitas preservadas: {", ".join(recipes_using)}',
+                'recipes_preserved': list(recipes_using),
+                'note': 'O ingrediente ainda existe, mas foi removido das receitas. Para deletar completamente, remova-o das receitas primeiro.'
+            }), 200
+        else:
+            # Nenhuma receita usa este ingrediente, pode deletar
+            db.session.delete(ingredient)
+            db.session.commit()
+            return jsonify({'message': 'Ingrediente deletado com sucesso'}), 200
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': str(e)}), 500

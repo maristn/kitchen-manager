@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ChefHat, Clock, Users, ArrowLeft, Edit2, Trash2, AlertCircle } from 'lucide-react';
-import { recipesAPI, shoppingAPI, historyAPI } from '../services/api';
+import { ChefHat, Clock, Users, ArrowLeft, Edit2, Trash2, AlertCircle, Snowflake } from 'lucide-react';
+import { recipesAPI, shoppingAPI, historyAPI, frozenMealsAPI } from '../services/api';
 import CookRecipeModal from '../components/CookRecipeModal';
 import RecipeForm from '../components/RecipeForm';
 import Modal from '../components/Modal';
@@ -13,15 +13,26 @@ const RecipeDetail = () => {
   const [recipe, setRecipe] = useState(null);
   const [canMakeInfo, setCanMakeInfo] = useState(null);
   const [recipeHistory, setRecipeHistory] = useState([]);
+  const [frozenMeals, setFrozenMeals] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showCookModal, setShowCookModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [editingFrozenId, setEditingFrozenId] = useState(null);
+  const [freezePortions, setFreezePortions] = useState('');
+  const [freezeMeasure, setFreezeMeasure] = useState('potes');
+  const [freezeDate, setFreezeDate] = useState(() => {
+    // Data de hoje no formato YYYY-MM-DD
+    const today = new Date();
+    return today.toISOString().split('T')[0];
+  });
+  const [freezing, setFreezing] = useState(false);
   const [alert, setAlert] = useState(null);
   
   useEffect(() => {
     loadRecipe();
     loadCanMake();
     loadHistory();
+    loadFrozenMeals();
   }, [id]);
   
   const loadRecipe = async () => {
@@ -51,6 +62,17 @@ const RecipeDetail = () => {
       setRecipeHistory(response.data);
     } catch (error) {
       console.error('Error loading history:', error);
+    }
+  };
+  
+  const loadFrozenMeals = async () => {
+    try {
+      const response = await frozenMealsAPI.getAll('frozen', false);
+      // Filtrar apenas as refeições congeladas desta receita
+      const recipeFrozen = response.data.filter(meal => meal.recipe_id === parseInt(id));
+      setFrozenMeals(recipeFrozen);
+    } catch (error) {
+      console.error('Error loading frozen meals:', error);
     }
   };
   
@@ -124,6 +146,104 @@ const RecipeDetail = () => {
     } catch (error) {
       console.error('Error deleting recipe:', error);
       showAlert('error', 'Erro ao deletar receita');
+    }
+  };
+  
+  const handleFreeze = async (e) => {
+    e.preventDefault();
+    
+    const portions = parseInt(freezePortions);
+    if (!portions || portions <= 0) {
+      showAlert('error', 'Digite uma quantidade válida de porções');
+      return;
+    }
+    
+    setFreezing(true);
+    try {
+      const data = {
+        recipe_id: recipe.id,
+        portions: portions,
+        measure: freezeMeasure || null
+      };
+      
+      // Adicionar data de congelamento se fornecida
+      if (freezeDate) {
+        // Converter para formato ISO com hora
+        const freezeDateTime = new Date(freezeDate);
+        freezeDateTime.setHours(12, 0, 0, 0); // Meio-dia para evitar problemas de timezone
+        data.frozen_at = freezeDateTime.toISOString();
+      }
+      
+      if (editingFrozenId) {
+        // Atualizar existente
+        await frozenMealsAPI.update(editingFrozenId, data);
+        showAlert('success', 'Porções congeladas atualizadas com sucesso!');
+        setEditingFrozenId(null);
+      } else {
+        // Criar novo
+        await frozenMealsAPI.create(data);
+        showAlert('success', `${portions} porção(ões) congelada(s) com sucesso!`);
+      }
+      
+      // Resetar formulário
+      setFreezePortions('');
+      setFreezeMeasure('potes');
+      const today = new Date();
+      setFreezeDate(today.toISOString().split('T')[0]);
+      loadFrozenMeals();
+    } catch (error) {
+      console.error('Error freezing meal:', error);
+      showAlert('error', error.response?.data?.error || 'Erro ao congelar porções');
+    } finally {
+      setFreezing(false);
+    }
+  };
+  
+  const handleEditFrozen = (meal) => {
+    setFreezePortions(meal.remaining_portions.toString());
+    setFreezeMeasure(meal.measure || 'potes');
+    // Extrair data do frozen_at
+    if (meal.frozen_at) {
+      const date = new Date(meal.frozen_at);
+      setFreezeDate(date.toISOString().split('T')[0]);
+    } else {
+      const today = new Date();
+      setFreezeDate(today.toISOString().split('T')[0]);
+    }
+    setEditingFrozenId(meal.id);
+  };
+  
+  const handleCancelEdit = () => {
+    setFreezePortions('');
+    setFreezeMeasure('potes');
+    const today = new Date();
+    setFreezeDate(today.toISOString().split('T')[0]);
+    setEditingFrozenId(null);
+  };
+  
+  const handleDeleteFrozen = async (mealId) => {
+    if (!window.confirm('Tem certeza que deseja remover esta entrada de refeição congelada?')) {
+      return;
+    }
+    
+    try {
+      await frozenMealsAPI.delete(mealId);
+      showAlert('success', 'Refeição congelada removida com sucesso');
+      loadFrozenMeals();
+    } catch (error) {
+      console.error('Error deleting frozen meal:', error);
+      showAlert('error', 'Erro ao remover refeição congelada');
+    }
+  };
+  
+  const handleConsumeFrozen = async (mealId, portions) => {
+    try {
+      await frozenMealsAPI.consume(mealId, { portions: parseInt(portions) });
+      showAlert('success', `${portions} porção(ões) consumida(s)`);
+      loadFrozenMeals();
+    } catch (error) {
+      console.error('Error consuming frozen meal:', error);
+      showAlert('error', error.response?.data?.error || 'Erro ao consumir porções');
     }
   };
   
@@ -301,6 +421,271 @@ const RecipeDetail = () => {
         )}
       </div>
       
+      {/* Porções Congeladas Section */}
+      <div className="card mb-6">
+        <div className="flex items-center space-x-3 mb-4">
+          <div className="bg-blue-100 p-2 rounded-lg">
+            <Snowflake className="w-5 h-5 text-blue-600" />
+          </div>
+          <div className="flex-1">
+            <h3 className="text-lg font-semibold text-gray-900">
+              Porções Congeladas
+            </h3>
+            <p className="text-sm text-gray-600">
+              Gerencie as porções desta receita que foram congeladas
+            </p>
+          </div>
+        </div>
+        
+        {/* Lista de Porções Congeladas Existentes */}
+        {frozenMeals.length > 0 && (
+          <div className="mb-6 space-y-3">
+            {frozenMeals.map((meal) => {
+              const isEditing = editingFrozenId === meal.id;
+              const isExpired = meal.is_expired;
+              const isExpiringSoon = meal.days_until_expiry !== null && meal.days_until_expiry <= 7 && meal.days_until_expiry > 0;
+              
+              return (
+                <div
+                  key={meal.id}
+                  className={`p-4 rounded-lg border-2 ${
+                    isExpired 
+                      ? 'border-red-300 bg-red-50' 
+                      : isExpiringSoon 
+                        ? 'border-yellow-300 bg-yellow-50' 
+                        : 'border-blue-200 bg-blue-50'
+                  }`}
+                >
+                  {isEditing ? (
+                    <form onSubmit={handleFreeze} className="space-y-3">
+                      <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                        <div>
+                          <label className="block text-xs font-medium text-gray-700 mb-1">
+                            Porções *
+                          </label>
+                          <input
+                            type="number"
+                            min="1"
+                            value={freezePortions}
+                            onChange={(e) => setFreezePortions(e.target.value)}
+                            className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                            required
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-gray-700 mb-1">
+                            Medida *
+                          </label>
+                          <select
+                            value={freezeMeasure}
+                            onChange={(e) => setFreezeMeasure(e.target.value)}
+                            className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                            required
+                          >
+                            <option value="potes">potes</option>
+                            <option value="porções">porções</option>
+                            <option value="g">g</option>
+                            <option value="kg">kg</option>
+                            <option value="ml">ml</option>
+                            <option value="L">L</option>
+                            <option value="unidades">unidades</option>
+                            <option value="xícaras">xícaras</option>
+                            <option value="colheres">colheres</option>
+                            <option value="sacos">sacos</option>
+                            <option value="bandejas">bandejas</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-gray-700 mb-1">
+                            Data de Congelamento *
+                          </label>
+                          <input
+                            type="date"
+                            value={freezeDate}
+                            onChange={(e) => setFreezeDate(e.target.value)}
+                            className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                            required
+                          />
+                        </div>
+                        <div className="flex items-end space-x-2">
+                          <button
+                            type="submit"
+                            className="px-4 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700"
+                          >
+                            Salvar
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleCancelEdit}
+                            className="px-4 py-2 bg-gray-300 text-gray-700 text-sm rounded-lg hover:bg-gray-400"
+                          >
+                            Cancelar
+                          </button>
+                        </div>
+                      </div>
+                    </form>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-center">
+                      <div>
+                        <div className="text-sm font-medium text-gray-900">
+                          {meal.remaining_portions} de {meal.portions} {meal.measure || 'unidades'}
+                        </div>
+                        <div className="text-xs text-gray-600">
+                          Congelado: {new Date(meal.frozen_at).toLocaleDateString('pt-BR')}
+                        </div>
+                      </div>
+                      <div className="text-xs text-gray-600">
+                        {meal.expiry_date && (
+                          <div className={isExpired ? 'text-red-600 font-medium' : isExpiringSoon ? 'text-yellow-600 font-medium' : ''}>
+                            Validade: {new Date(meal.expiry_date).toLocaleDateString('pt-BR')}
+                            {meal.days_until_expiry !== null && (
+                              <span> ({meal.days_until_expiry > 0 ? `${meal.days_until_expiry} dias` : 'Vencido'})</span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        {meal.remaining_portions > 0 && (
+                          <input
+                            type="number"
+                            min="1"
+                            max={meal.remaining_portions}
+                            defaultValue="1"
+                            className="w-16 px-2 py-1 text-sm border border-gray-300 rounded"
+                            id={`consume-${meal.id}`}
+                          />
+                        )}
+                        {meal.remaining_portions > 0 && (
+                          <button
+                            onClick={() => {
+                              const input = document.getElementById(`consume-${meal.id}`);
+                              handleConsumeFrozen(meal.id, input.value || 1);
+                            }}
+                            className="px-3 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700"
+                          >
+                            Consumir
+                          </button>
+                        )}
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <button
+                          onClick={() => handleEditFrozen(meal)}
+                          className="p-2 text-blue-600 hover:bg-blue-100 rounded"
+                          title="Editar"
+                        >
+                          <Edit2 className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteFrozen(meal.id)}
+                          className="p-2 text-red-600 hover:bg-red-100 rounded"
+                          title="Remover"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+        
+        {/* Formulário para Adicionar Nova Porção */}
+        <div className="border-t border-gray-200 pt-4">
+          <h4 className="text-sm font-semibold text-gray-900 mb-3">
+            {editingFrozenId ? 'Editar Porção Congelada' : 'Adicionar Nova Porção Congelada'}
+          </h4>
+          <form onSubmit={handleFreeze} className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Quantidade de Porções *
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  value={freezePortions}
+                  onChange={(e) => setFreezePortions(e.target.value)}
+                  placeholder={`Ex: ${recipe.servings || 1}`}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  required
+                  disabled={freezing}
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Receita padrão: {recipe.servings || 1} porções
+                </p>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Medida *
+                </label>
+                <select
+                  value={freezeMeasure}
+                  onChange={(e) => setFreezeMeasure(e.target.value)}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  required
+                  disabled={freezing}
+                >
+                  <option value="potes">potes</option>
+                  <option value="porções">porções</option>
+                  <option value="g">g</option>
+                  <option value="kg">kg</option>
+                  <option value="ml">ml</option>
+                  <option value="L">L</option>
+                  <option value="unidades">unidades</option>
+                  <option value="xícaras">xícaras</option>
+                  <option value="colheres">colheres</option>
+                  <option value="sacos">sacos</option>
+                  <option value="bandejas">bandejas</option>
+                </select>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Data de Congelamento *
+                </label>
+                <input
+                  type="date"
+                  value={freezeDate}
+                  onChange={(e) => setFreezeDate(e.target.value)}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  required
+                  disabled={freezing}
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Padrão: hoje
+                </p>
+              </div>
+              
+              <div className="flex items-end">
+                <button
+                  type="submit"
+                  disabled={freezing || !freezePortions}
+                  className="w-full px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <Snowflake className="w-4 h-4" />
+                  <span>{freezing ? 'Salvando...' : editingFrozenId ? 'Atualizar' : 'Adicionar'}</span>
+                </button>
+              </div>
+            </div>
+            
+            {editingFrozenId && (
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  onClick={handleCancelEdit}
+                  className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800"
+                >
+                  Cancelar edição
+                </button>
+              </div>
+            )}
+          </form>
+        </div>
+      </div>
+      
       {/* History */}
       {recipeHistory.length > 0 && (
         <div className="card">
@@ -358,6 +743,7 @@ const RecipeDetail = () => {
           />
         )}
       </Modal>
+      
     </div>
   );
 };
