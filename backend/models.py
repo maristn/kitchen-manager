@@ -1,5 +1,5 @@
 from flask_sqlalchemy import SQLAlchemy
-from datetime import datetime
+from datetime import datetime, timedelta
 
 db = SQLAlchemy()
 
@@ -51,12 +51,14 @@ class Recipe(db.Model):
     servings = db.Column(db.Integer, default=1)  # Porções padrão
     prep_time = db.Column(db.Integer)  # Minutos
     cook_time = db.Column(db.Integer)  # Minutos
+    emoji = db.Column(db.String(10), default='🍽️')  # Emoji representativo da receita
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     # Relacionamentos
     recipe_ingredients = db.relationship('RecipeIngredient', back_populates='recipe', cascade='all, delete-orphan')
     cooking_history = db.relationship('CookingHistory', back_populates='recipe', cascade='all, delete-orphan')
+    frozen_meals = db.relationship('FrozenMeal', back_populates='recipe', cascade='all, delete-orphan')
     
     def to_dict(self, include_ingredients=False):
         result = {
@@ -66,6 +68,7 @@ class Recipe(db.Model):
             'servings': self.servings,
             'prep_time': self.prep_time,
             'cook_time': self.cook_time,
+            'emoji': self.emoji or '🍽️',
             'created_at': self.created_at.isoformat(),
             'updated_at': self.updated_at.isoformat()
         }
@@ -109,7 +112,8 @@ class RecipeIngredient(db.Model):
             'ingredient_name': self.ingredient.name if self.ingredient else None,
             'quantity_needed': self.quantity_needed,
             'unit': self.unit,
-            'available_quantity': self.ingredient.quantity if self.ingredient else 0
+            'available_quantity': self.ingredient.quantity if self.ingredient else 0,
+            'vegan': self.ingredient.vegan if self.ingredient else False
         }
 
 
@@ -159,4 +163,79 @@ class ShoppingList(db.Model):
             'added_at': self.added_at.isoformat(),
             'purchased': self.purchased,
             'purchased_at': self.purchased_at.isoformat() if self.purchased_at else None
+        }
+
+
+class FrozenMeal(db.Model):
+    __tablename__ = 'frozen_meals'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    recipe_id = db.Column(db.Integer, db.ForeignKey('recipes.id'), nullable=False)
+    portions = db.Column(db.Integer, nullable=False)  # Quantidade de porções congeladas
+    frozen_at = db.Column(db.DateTime, default=datetime.utcnow)  # Data de congelamento
+    expiry_date = db.Column(db.Date, nullable=True)  # Data de validade (padrão: 3 meses)
+    consumed_at = db.Column(db.DateTime, nullable=True)  # Quando foi consumido
+    consumed_portions = db.Column(db.Integer, default=0)  # Porções já consumidas
+    measure = db.Column(db.String(20), nullable=True)  # Medida (g, kg, ml, L, potes, etc)
+    notes = db.Column(db.Text, nullable=True)  # Notas sobre o congelamento/preparação
+    status = db.Column(db.String(20), default='frozen')  # frozen, thawed, consumed
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relacionamento
+    recipe = db.relationship('Recipe', back_populates='frozen_meals')
+    
+    def __init__(self, *args, **kwargs):
+        # Extrair expiry_date antes de chamar super para não sobrescrever
+        expiry_date_provided = kwargs.get('expiry_date')
+        frozen_at_provided = kwargs.get('frozen_at')
+        
+        # Se frozen_at não foi fornecido, usar datetime.utcnow()
+        if frozen_at_provided is None:
+            frozen_at_provided = datetime.utcnow()
+            kwargs['frozen_at'] = frozen_at_provided
+        
+        super(FrozenMeal, self).__init__(*args, **kwargs)
+        
+        # Se não foi especificada data de validade, usar 3 meses a partir da data de congelamento
+        if not expiry_date_provided and not self.expiry_date:
+            # Usar frozen_at do objeto se disponível, senão usar o fornecido
+            frozen_at_to_use = self.frozen_at if self.frozen_at else frozen_at_provided
+            
+            if isinstance(frozen_at_to_use, datetime):
+                self.expiry_date = (frozen_at_to_use + timedelta(days=90)).date()
+            else:
+                self.expiry_date = (datetime.utcnow() + timedelta(days=90)).date()
+    
+    def to_dict(self):
+        from datetime import date
+        today = date.today()
+        
+        # Calcular porções restantes
+        remaining_portions = self.portions - self.consumed_portions
+        
+        # Verificar se está vencido
+        is_expired = False
+        days_until_expiry = None
+        if self.expiry_date:
+            is_expired = today > self.expiry_date
+            if not is_expired:
+                days_until_expiry = (self.expiry_date - today).days
+        
+        return {
+            'id': self.id,
+            'recipe_id': self.recipe_id,
+            'recipe_name': self.recipe.name if self.recipe else None,
+            'recipe_emoji': self.recipe.emoji if self.recipe else '🍽️',
+            'portions': self.portions,
+            'remaining_portions': remaining_portions,
+            'consumed_portions': self.consumed_portions,
+            'frozen_at': self.frozen_at.isoformat() if self.frozen_at else None,
+            'expiry_date': self.expiry_date.isoformat() if self.expiry_date else None,
+            'consumed_at': self.consumed_at.isoformat() if self.consumed_at else None,
+            'measure': self.measure,
+            'notes': self.notes,
+            'status': self.status,
+            'is_expired': is_expired,
+            'days_until_expiry': days_until_expiry,
+            'is_available': remaining_portions > 0 and self.status == 'frozen' and not is_expired
         }

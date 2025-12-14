@@ -1,7 +1,10 @@
 import axios from 'axios';
 
+// Usar variável de ambiente em produção, fallback para localhost em desenvolvimento
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+
 const api = axios.create({
-  baseURL: 'http://localhost:5000/api',
+  baseURL: API_BASE_URL,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -61,6 +64,17 @@ export const historyAPI = {
   getStats: () => api.get('/history/stats'),
   getRecent: () => api.get('/history/recent'),
   getByRecipe: (recipeId) => api.get(`/history/recipe/${recipeId}`),
+};
+
+// Refeições Congeladas
+export const frozenMealsAPI = {
+  getAll: (status, expiredOnly) => api.get('/frozen-meals', { params: { status, expired_only: expiredOnly } }),
+  getById: (id) => api.get(`/frozen-meals/${id}`),
+  create: (data) => api.post('/frozen-meals', data),
+  update: (id, data) => api.put(`/frozen-meals/${id}`, data),
+  delete: (id) => api.delete(`/frozen-meals/${id}`),
+  consume: (id, portions) => api.post(`/frozen-meals/${id}/consume`, { portions }),
+  getStats: () => api.get('/frozen-meals/stats'),
 };
 
 export default api;

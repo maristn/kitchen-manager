@@ -6,6 +6,7 @@ import Alert from '../components/Alert';
 const Ingredients = () => {
   const [ingredients, setIngredients] = useState([]);
   const [filteredIngredients, setFilteredIngredients] = useState([]);
+  const [zeroQuantityIngredients, setZeroQuantityIngredients] = useState([]);
   const [loading, setLoading] = useState(true);
   const [editingId, setEditingId] = useState(null);
   const [editingField, setEditingField] = useState(null);
@@ -94,6 +95,9 @@ const Ingredients = () => {
   const filterIngredients = () => {
     let filtered = [...ingredients];
     
+    // Separate zero quantity ingredients (not unlimited)
+    const zeroQty = filtered.filter(ing => ing.quantity === 0 && !ing.unlimited);
+    
     // Filter out ingredients with quantity 0, BUT keep unlimited ingredients (like water)
     filtered = filtered.filter(ing => ing.quantity > 0 || ing.unlimited);
     
@@ -112,7 +116,7 @@ const Ingredients = () => {
       filtered = filtered.filter(ing => ing.location === locationFilter);
     }
     
-    // Sort
+    // Sort main list
     filtered.sort((a, b) => {
       let aVal = a[sortField];
       let bVal = b[sortField];
@@ -134,7 +138,11 @@ const Ingredients = () => {
       }
     });
     
+    // Sort zero quantity list by name
+    zeroQty.sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase()));
+    
     setFilteredIngredients(filtered);
+    setZeroQuantityIngredients(zeroQty);
   };
   
   const handleSort = (field) => {
@@ -194,15 +202,20 @@ const Ingredients = () => {
     });
   };
   
-  const handleSaveEdit = async (ingredient) => {
+  const handleSaveEdit = async (ingredient, dataToSave = null) => {
     try {
-      await ingredientsAPI.update(ingredient.id, editingData);
+      const finalData = dataToSave || editingData;
+      await ingredientsAPI.update(ingredient.id, finalData);
       showAlert('success', 'Ingrediente atualizado com sucesso');
+      
+      // Aguardar recarregamento dos dados antes de resetar o estado de edição
+      await loadIngredients();
+      await loadFilters();
+      
+      // Agora resetar o estado de edição com os dados já atualizados
       setEditingId(null);
       setEditingField(null);
       setEditingData({});
-      loadIngredients();
-      loadFilters();
     } catch (error) {
       console.error('Error updating ingredient:', error);
       showAlert('error', error.response?.data?.error || 'Erro ao atualizar ingrediente');
@@ -1038,11 +1051,25 @@ const Ingredients = () => {
                           value={data.unit || ''}
                           onChange={(e) => {
                             const selectedValue = e.target.value;
-                            console.log('Edição - Medida selecionada:', selectedValue);
-                            updateEditingField('unit', selectedValue);
-                            setTimeout(() => handleSaveEdit(ingredient), 100);
+                            const updatedData = { ...editingData, unit: selectedValue };
+                            setEditingData(updatedData);
+                            // Passar os dados atualizados diretamente
+                            handleSaveEdit(ingredient, updatedData);
                           }}
-                          onBlur={() => handleSaveEdit(ingredient)}
+                          onFocus={(e) => {
+                            // Forçar abertura do dropdown no foco
+                            setTimeout(() => {
+                              if (e.target.showPicker) {
+                                try {
+                                  e.target.showPicker();
+                                } catch (err) {
+                                  e.target.click();
+                                }
+                              } else {
+                                e.target.click();
+                              }
+                            }, 100);
+                          }}
                           className="w-full px-3 py-2 text-sm font-medium text-gray-900 bg-white border-2 border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 cursor-pointer"
                           autoFocus
                         >
@@ -1076,14 +1103,30 @@ const Ingredients = () => {
                         <select
                           value={data.category}
                           onChange={(e) => {
-                            updateEditingField('category', e.target.value);
-                            setTimeout(() => handleSaveEdit(ingredient), 100);
+                            const selectedValue = e.target.value;
+                            const updatedData = { ...editingData, category: selectedValue };
+                            setEditingData(updatedData);
+                            // Passar os dados atualizados diretamente
+                            handleSaveEdit(ingredient, updatedData);
                           }}
-                          onBlur={() => handleSaveEdit(ingredient)}
-                          className="w-full px-3 py-2 text-xs bg-white/80 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                          onFocus={(e) => {
+                            // Forçar abertura do dropdown no foco
+                            setTimeout(() => {
+                              if (e.target.showPicker) {
+                                try {
+                                  e.target.showPicker();
+                                } catch (err) {
+                                  e.target.click();
+                                }
+                              } else {
+                                e.target.click();
+                              }
+                            }, 100);
+                          }}
+                          className="w-full px-3 py-2 text-xs text-gray-900 bg-white border-2 border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30 cursor-pointer"
                           autoFocus
                         >
-                          <option value="">Categoria</option>
+                          <option value="">Selecione...</option>
                           {categoryOptions.map(c => <option key={c} value={c}>{c}</option>)}
                         </select>
                       ) : (
@@ -1114,14 +1157,31 @@ const Ingredients = () => {
                         <select
                           value={data.location}
                           onChange={(e) => {
-                            updateEditingField('location', e.target.value);
-                            setTimeout(() => handleSaveEdit(ingredient), 100);
+                            const selectedValue = e.target.value;
+                            const updatedData = { ...editingData, location: selectedValue };
+                            setEditingData(updatedData);
+                            // Passar os dados atualizados diretamente
+                            handleSaveEdit(ingredient, updatedData);
                           }}
-                          onBlur={() => handleSaveEdit(ingredient)}
-                          className="w-full px-3 py-2 text-xs bg-white/80 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                          onFocus={(e) => {
+                            // Forçar abertura do dropdown no foco
+                            setTimeout(() => {
+                              if (e.target.showPicker) {
+                                try {
+                                  e.target.showPicker();
+                                } catch (err) {
+                                  // Fallback para navegadores que não suportam showPicker
+                                  e.target.click();
+                                }
+                              } else {
+                                e.target.click();
+                              }
+                            }, 100);
+                          }}
+                          className="w-full px-3 py-2 text-xs text-gray-900 bg-white border-2 border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30 cursor-pointer"
                           autoFocus
                         >
-                          <option value="">Local</option>
+                          <option value="">Selecione...</option>
                           {locationOptions.map(l => <option key={l} value={l}>{l}</option>)}
                         </select>
                       ) : (
@@ -1195,6 +1255,372 @@ const Ingredients = () => {
             <Plus className="w-5 h-5 mr-2 group-hover:rotate-90 transition-transform duration-300" />
             Novo Ingrediente
           </button>
+        </div>
+      )}
+
+      {/* Zero Quantity Ingredients Section */}
+      {zeroQuantityIngredients.length > 0 && (
+        <div className="mt-12 space-y-4">
+          <div className="flex items-center gap-3">
+            <Package className="w-6 h-6 text-gray-400" />
+            <h2 className="text-2xl font-bold text-gray-600">
+              Ingredientes sem Estoque
+            </h2>
+            <span className="px-3 py-1 text-sm font-semibold rounded-full bg-gray-100 text-gray-600">
+              {zeroQuantityIngredients.length}
+            </span>
+          </div>
+          
+          <div className="bg-white/80 backdrop-blur-xl rounded-3xl shadow-soft border-2 border-dashed border-gray-300/50 overflow-hidden">
+            {/* Header */}
+            <div className="bg-gradient-to-br from-gray-50/80 to-gray-100/30 backdrop-blur-sm border-b border-gray-200/50 px-6 py-4">
+              <div className="grid grid-cols-12 gap-4 text-xs font-bold text-gray-600 uppercase tracking-wide items-center">
+                <div className="col-span-1 flex items-center">
+                  <input
+                    type="checkbox"
+                    checked={false}
+                    disabled
+                    className="w-4 h-4 text-primary-600 bg-white border-gray-300 rounded focus:ring-primary-500 cursor-not-allowed opacity-50"
+                  />
+                </div>
+                <div className="col-span-2 flex items-center">
+                  Nome
+                  <ArrowUpDown className="w-3.5 h-3.5 ml-2 opacity-30" />
+                </div>
+                <div className="col-span-2 flex items-center">
+                  Quantidade
+                  <ArrowUpDown className="w-3.5 h-3.5 ml-2 opacity-30" />
+                </div>
+                <div className="col-span-1 flex items-center">
+                  Medida
+                  <ArrowUpDown className="w-3.5 h-3.5 ml-2 opacity-30" />
+                </div>
+                <div className="col-span-2 flex items-center">
+                  Categoria
+                  <ArrowUpDown className="w-3.5 h-3.5 ml-2 opacity-30" />
+                </div>
+                <div className="col-span-2 flex items-center">
+                  Local
+                  <ArrowUpDown className="w-3.5 h-3.5 ml-2 opacity-30" />
+                </div>
+                <div className="col-span-2">Validade</div>
+              </div>
+            </div>
+            
+            {/* Rows */}
+            <div className="divide-y divide-gray-100/50">
+              {zeroQuantityIngredients.map((ingredient, index) => {
+                const isEditing = editingId === ingredient.id;
+                const data = isEditing ? editingData : ingredient;
+                const isSelected = selectedIds.includes(ingredient.id);
+                
+                return (
+                  <div
+                    key={ingredient.id}
+                    className={`px-6 py-4 transition-all duration-200 ${
+                      isSelected ? 'bg-primary-50/20' : ''
+                    } ${
+                      isEditing 
+                        ? 'bg-blue-50/30 border-l-4 border-blue-500' 
+                        : 'hover:bg-gray-50/50'
+                    }`}
+                    style={{
+                      animation: `fadeIn 0.4s ease-out ${index * 0.03}s both`
+                    }}
+                  >
+                    <div className="grid grid-cols-12 gap-4 items-center">
+                      {/* Checkbox */}
+                      <div className="col-span-1">
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => toggleSelect(ingredient.id)}
+                          className="w-4 h-4 text-primary-600 bg-white border-gray-300 rounded focus:ring-primary-500 cursor-pointer"
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                      </div>
+                      
+                      {/* Name */}
+                      <div 
+                        className="col-span-2 cursor-text"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (!isEditing) {
+                            handleCellClick(ingredient, 'name');
+                          }
+                        }}
+                      >
+                        {isEditing && editingField === 'name' ? (
+                          <input
+                            type="text"
+                            value={data.name}
+                            onChange={(e) => updateEditingField('name', e.target.value)}
+                            onBlur={() => handleSaveEdit(ingredient)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') handleSaveEdit(ingredient);
+                              if (e.key === 'Escape') handleCancelEdit();
+                            }}
+                            className="w-full px-3 py-2 text-sm text-gray-900 bg-white/80 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                            autoFocus
+                          />
+                        ) : (
+                          <div className="flex items-center space-x-3 hover:bg-blue-50/30 rounded-xl px-2 py-1.5 -mx-2 transition-colors">
+                            <div className="relative">
+                              <div 
+                                data-emoji-button
+                                className="w-10 h-10 bg-gradient-to-br from-gray-100 to-gray-200/50 rounded-2xl flex items-center justify-center text-2xl shadow-soft transition-all duration-200 cursor-pointer hover:scale-110 hover:shadow-soft-md"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setShowEmojiPicker(showEmojiPicker === ingredient.id ? null : ingredient.id);
+                                }}
+                                title="Clique para mudar o emoji"
+                              >
+                                {getIngredientEmoji(ingredient)}
+                              </div>
+                              
+                              {/* Emoji Picker */}
+                              {showEmojiPicker === ingredient.id && (
+                                <div 
+                                  data-emoji-picker
+                                  className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-[9999] bg-white/95 backdrop-blur-xl rounded-2xl shadow-soft-lg border border-gray-200/50 p-4 w-72"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <div className="flex items-center justify-between mb-2">
+                                    <p className="text-xs font-semibold text-gray-700">Escolha um emoji</p>
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setShowEmojiPicker(null);
+                                      }}
+                                      className="text-gray-400 hover:text-gray-600"
+                                    >
+                                      <X className="w-3 h-3" />
+                                    </button>
+                                  </div>
+                                  <div className="grid grid-cols-6 gap-2 max-h-48 overflow-y-auto">
+                                    {commonEmojis.map((emoji) => (
+                                      <button
+                                        key={emoji}
+                                        onClick={async () => {
+                                          await ingredientsAPI.update(ingredient.id, { emoji });
+                                          await loadIngredients();
+                                          await loadFilters();
+                                          setShowEmojiPicker(null);
+                                        }}
+                                        className="text-2xl hover:bg-gray-100 rounded-lg p-2 transition-colors"
+                                      >
+                                        {emoji}
+                                      </button>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                            <span className="text-sm font-semibold text-gray-800">{ingredient.name}</span>
+                          </div>
+                        )}
+                      </div>
+                      
+                      {/* Quantity */}
+                      <div
+                        className="col-span-2 cursor-pointer"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleCellClick(ingredient, 'quantity');
+                        }}
+                      >
+                        {isEditing && editingField === 'quantity' ? (
+                          <input
+                            type="number"
+                            step="0.01"
+                            value={data.quantity}
+                            onChange={(e) => updateEditingField('quantity', parseFloat(e.target.value) || 0)}
+                            onBlur={() => handleSaveEdit(ingredient)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') handleSaveEdit(ingredient);
+                              if (e.key === 'Escape') handleCancelEdit();
+                            }}
+                            className="w-full px-3 py-2 text-sm text-gray-900 bg-white/80 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                            autoFocus
+                          />
+                        ) : (
+                          <div className="hover:bg-blue-50/30 rounded-xl px-2 py-1.5 -mx-2 transition-colors">
+                            <span className="text-sm text-gray-600 font-medium">{ingredient.quantity}</span>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Unit */}
+                      <div
+                        className="col-span-1 cursor-pointer"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleCellClick(ingredient, 'unit');
+                        }}
+                      >
+                        {isEditing && editingField === 'unit' ? (
+                          <select
+                            value={data.unit}
+                            onChange={(e) => {
+                              const selectedValue = e.target.value;
+                              const updatedData = { ...editingData, unit: selectedValue };
+                              setEditingData(updatedData);
+                              handleSaveEdit(ingredient, updatedData);
+                            }}
+                            onFocus={(e) => {
+                              setTimeout(() => {
+                                if (e.target.showPicker) {
+                                  try { e.target.showPicker(); } catch (err) { e.target.click(); }
+                                } else {
+                                  e.target.click();
+                                }
+                              }, 100);
+                            }}
+                            className="w-full px-3 py-2 text-xs text-gray-900 bg-white border-2 border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30 cursor-pointer"
+                            autoFocus
+                          >
+                            <option value="">Selecione...</option>
+                            {units.map(u => <option key={u} value={u}>{u}</option>)}
+                          </select>
+                        ) : (
+                          <div className="hover:bg-blue-50/30 rounded-xl px-2 py-1.5 -mx-2 transition-colors">
+                            <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-blue-50 text-blue-600 border border-blue-100">
+                              {ingredient.unit || '-'}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Category */}
+                      <div
+                        className="col-span-2 cursor-pointer"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleCellClick(ingredient, 'category');
+                        }}
+                      >
+                        {isEditing && editingField === 'category' ? (
+                          <select
+                            value={data.category}
+                            onChange={(e) => {
+                              const selectedValue = e.target.value;
+                              const updatedData = { ...editingData, category: selectedValue };
+                              setEditingData(updatedData);
+                              handleSaveEdit(ingredient, updatedData);
+                            }}
+                            onFocus={(e) => {
+                              setTimeout(() => {
+                                if (e.target.showPicker) {
+                                  try { e.target.showPicker(); } catch (err) { e.target.click(); }
+                                } else {
+                                  e.target.click();
+                                }
+                              }, 100);
+                            }}
+                            className="w-full px-3 py-2 text-xs text-gray-900 bg-white border-2 border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30 cursor-pointer"
+                            autoFocus
+                          >
+                            <option value="">Selecione...</option>
+                            {categoryOptions.map(c => <option key={c} value={c}>{c}</option>)}
+                          </select>
+                        ) : (
+                          <div className="hover:bg-blue-50/30 rounded-xl px-2 py-1.5 -mx-2 transition-colors">
+                            <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-purple-50 text-purple-600 border border-purple-100">
+                              {ingredient.category || 'Sem categoria'}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Location */}
+                      <div
+                        className="col-span-2 cursor-pointer"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleCellClick(ingredient, 'location');
+                        }}
+                      >
+                        {isEditing && editingField === 'location' ? (
+                          <select
+                            value={data.location}
+                            onChange={(e) => {
+                              const selectedValue = e.target.value;
+                              const updatedData = { ...editingData, location: selectedValue };
+                              setEditingData(updatedData);
+                              handleSaveEdit(ingredient, updatedData);
+                            }}
+                            onFocus={(e) => {
+                              setTimeout(() => {
+                                if (e.target.showPicker) {
+                                  try { e.target.showPicker(); } catch (err) { e.target.click(); }
+                                } else {
+                                  e.target.click();
+                                }
+                              }, 100);
+                            }}
+                            className="w-full px-3 py-2 text-xs text-gray-900 bg-white border-2 border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30 cursor-pointer"
+                            autoFocus
+                          >
+                            <option value="">Selecione...</option>
+                            {locationOptions.map(l => <option key={l} value={l}>{l}</option>)}
+                          </select>
+                        ) : (
+                          <div className="hover:bg-blue-50/30 rounded-xl px-2 py-1.5 -mx-2 transition-colors">
+                            <span className="text-xs text-gray-600 font-medium">📍 {ingredient.location || 'Sem local'}</span>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Expiry Date */}
+                      <div
+                        className="col-span-2 cursor-pointer"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (!isEditing) {
+                            handleCellClick(ingredient, 'expiry_date');
+                          }
+                        }}
+                      >
+                        {isEditing && editingField === 'expiry_date' ? (
+                          <input
+                            type="date"
+                            value={data.expiry_date || ''}
+                            onChange={(e) => updateEditingField('expiry_date', e.target.value)}
+                            onBlur={() => handleSaveEdit(ingredient)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') handleSaveEdit(ingredient);
+                              if (e.key === 'Escape') handleCancelEdit();
+                            }}
+                            className="w-full px-3 py-2 text-xs text-gray-900 bg-white/80 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                            autoFocus
+                          />
+                        ) : (
+                          <div className="hover:bg-blue-50/30 rounded-xl px-2 py-1.5 -mx-2 transition-colors">
+                            {ingredient.expiry_date ? (
+                              <div className="flex flex-col gap-1">
+                                <span className="text-xs text-gray-600 font-medium">
+                                  {new Date(ingredient.expiry_date).toLocaleDateString('pt-BR')}
+                                </span>
+                                {getStatusBadge(ingredient)}
+                              </div>
+                            ) : (
+                              <span className="text-xs text-gray-400">Sem validade</span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            
+            <div className="px-6 py-4 bg-gradient-to-br from-gray-50/50 to-gray-100/20 border-t border-gray-200/50">
+              <p className="text-xs text-gray-500 text-center font-medium">
+                💡 Clique em qualquer campo para editar • Adicione estoque para mover para a lista principal
+              </p>
+            </div>
+          </div>
         </div>
       )}
       

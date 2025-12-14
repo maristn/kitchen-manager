@@ -14,18 +14,32 @@ const RecipeForm = ({ recipe, onSubmit, onCancel }) => {
   
   const [availableIngredients, setAvailableIngredients] = useState([]);
   
+  // Unidades de medida disponíveis
+  const units = ['g', 'kg', 'ml', 'L', 'unidades', 'xícaras', 'colheres (sopa)', 'colheres (chá)'];
+  
   useEffect(() => {
     loadIngredients();
-    
+  }, []);
+  
+  useEffect(() => {
     if (recipe) {
-      setFormData({
+      // Converter ingredientes para o formato do formulário
+      const formattedIngredients = recipe.ingredients?.map(ing => ({
+        ingredient_id: String(ing.ingredient_id || ''),
+        quantity_needed: parseFloat(ing.quantity_needed) || 0,
+        unit: ing.unit || 'g'
+      })) || [];
+      
+      const newFormData = {
         name: recipe.name || '',
         instructions: recipe.instructions || '',
-        servings: recipe.servings || 1,
-        prep_time: recipe.prep_time || 0,
-        cook_time: recipe.cook_time || 0,
-        ingredients: recipe.ingredients || []
-      });
+        servings: parseInt(recipe.servings) || 1,
+        prep_time: parseInt(recipe.prep_time) || 0,
+        cook_time: parseInt(recipe.cook_time) || 0,
+        ingredients: formattedIngredients
+      };
+      
+      setFormData(newFormData);
     }
   }, [recipe]);
   
@@ -63,22 +77,39 @@ const RecipeForm = ({ recipe, onSubmit, onCancel }) => {
   const handleIngredientChange = (index, field, value) => {
     setFormData(prev => ({
       ...prev,
-      ingredients: prev.ingredients.map((ing, i) =>
-        i === index ? { ...ing, [field]: value } : ing
-      )
+      ingredients: prev.ingredients.map((ing, i) => {
+        if (i !== index) return ing;
+        
+        // Converter valor baseado no campo
+        let finalValue = value;
+        if (field === 'quantity_needed') {
+          finalValue = parseFloat(value) || 0;
+        } else if (field === 'ingredient_id') {
+          finalValue = String(value);
+        }
+        
+        return { ...ing, [field]: finalValue };
+      })
     }));
   };
   
   const handleSubmit = (e) => {
     e.preventDefault();
     
-    // Filtrar ingredientes válidos
-    const validIngredients = formData.ingredients.filter(
-      ing => ing.ingredient_id && ing.quantity_needed > 0
-    );
+    // Filtrar ingredientes válidos e converter para o formato correto
+    const validIngredients = formData.ingredients
+      .filter(ing => ing.ingredient_id && ing.quantity_needed > 0)
+      .map(ing => ({
+        ingredient_id: parseInt(ing.ingredient_id),
+        quantity_needed: parseFloat(ing.quantity_needed),
+        unit: ing.unit
+      }));
     
     onSubmit({
       ...formData,
+      servings: parseInt(formData.servings) || 1,
+      prep_time: parseInt(formData.prep_time) || 0,
+      cook_time: parseInt(formData.cook_time) || 0,
       ingredients: validIngredients
     });
   };
@@ -173,7 +204,7 @@ const RecipeForm = ({ recipe, onSubmit, onCancel }) => {
                 >
                   <option value="">Selecione...</option>
                   {availableIngredients.map(ing => (
-                    <option key={ing.id} value={ing.id}>
+                    <option key={ing.id} value={String(ing.id)}>
                       {ing.name} ({ing.quantity} {ing.unit})
                     </option>
                   ))}
@@ -181,7 +212,7 @@ const RecipeForm = ({ recipe, onSubmit, onCancel }) => {
                 
                 <input
                   type="number"
-                  value={ingredient.quantity_needed}
+                  value={ingredient.quantity_needed || ''}
                   onChange={(e) => handleIngredientChange(index, 'quantity_needed', e.target.value)}
                   className="input"
                   placeholder="Quantidade"
@@ -190,14 +221,17 @@ const RecipeForm = ({ recipe, onSubmit, onCancel }) => {
                   required
                 />
                 
-                <input
-                  type="text"
-                  value={ingredient.unit}
+                <select
+                  value={ingredient.unit || ''}
                   onChange={(e) => handleIngredientChange(index, 'unit', e.target.value)}
                   className="input"
-                  placeholder="Unidade"
                   required
-                />
+                >
+                  <option value="">Selecione...</option>
+                  {units.map(unit => (
+                    <option key={unit} value={unit}>{unit}</option>
+                  ))}
+                </select>
               </div>
               
               <button
