@@ -187,16 +187,22 @@ class FrozenMeal(db.Model):
     def __init__(self, *args, **kwargs):
         # Extrair expiry_date antes de chamar super para não sobrescrever
         expiry_date_provided = kwargs.get('expiry_date')
-        frozen_at_provided = kwargs.get('frozen_at', datetime.utcnow())
+        frozen_at_provided = kwargs.get('frozen_at')
+        
+        # Se frozen_at não foi fornecido, usar datetime.utcnow()
+        if frozen_at_provided is None:
+            frozen_at_provided = datetime.utcnow()
+            kwargs['frozen_at'] = frozen_at_provided
         
         super(FrozenMeal, self).__init__(*args, **kwargs)
         
         # Se não foi especificada data de validade, usar 3 meses a partir da data de congelamento
         if not expiry_date_provided and not self.expiry_date:
-            if isinstance(frozen_at_provided, datetime):
-                self.expiry_date = (frozen_at_provided + timedelta(days=90)).date()
-            elif isinstance(self.frozen_at, datetime):
-                self.expiry_date = (self.frozen_at + timedelta(days=90)).date()
+            # Usar frozen_at do objeto se disponível, senão usar o fornecido
+            frozen_at_to_use = self.frozen_at if self.frozen_at else frozen_at_provided
+            
+            if isinstance(frozen_at_to_use, datetime):
+                self.expiry_date = (frozen_at_to_use + timedelta(days=90)).date()
             else:
                 self.expiry_date = (datetime.utcnow() + timedelta(days=90)).date()
     

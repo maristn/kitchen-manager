@@ -14,6 +14,9 @@ const RecipeForm = ({ recipe, onSubmit, onCancel }) => {
   
   const [availableIngredients, setAvailableIngredients] = useState([]);
   
+  // Unidades de medida disponíveis
+  const units = ['g', 'kg', 'ml', 'L', 'unidades', 'xícaras', 'colheres (sopa)', 'colheres (chá)'];
+  
   useEffect(() => {
     loadIngredients();
   }, []);
@@ -218,14 +221,17 @@ const RecipeForm = ({ recipe, onSubmit, onCancel }) => {
                   required
                 />
                 
-                <input
-                  type="text"
+                <select
                   value={ingredient.unit || ''}
                   onChange={(e) => handleIngredientChange(index, 'unit', e.target.value)}
                   className="input"
-                  placeholder="Unidade"
                   required
-                />
+                >
+                  <option value="">Selecione...</option>
+                  {units.map(unit => (
+                    <option key={unit} value={unit}>{unit}</option>
+                  ))}
+                </select>
               </div>
               
               <button

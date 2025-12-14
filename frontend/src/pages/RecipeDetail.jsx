@@ -628,15 +628,17 @@ const RecipeDetail = () => {
                   required
                   disabled={freezing}
                 >
-                  <option value="potes">potes</option>
-                  <option value="porções">porções</option>
+                  <option value="">Selecione...</option>
                   <option value="g">g</option>
                   <option value="kg">kg</option>
                   <option value="ml">ml</option>
                   <option value="L">L</option>
                   <option value="unidades">unidades</option>
                   <option value="xícaras">xícaras</option>
-                  <option value="colheres">colheres</option>
+                  <option value="colheres (sopa)">colheres (sopa)</option>
+                  <option value="colheres (chá)">colheres (chá)</option>
+                  <option value="potes">potes</option>
+                  <option value="porções">porções</option>
                   <option value="sacos">sacos</option>
                   <option value="bandejas">bandejas</option>
                 </select>

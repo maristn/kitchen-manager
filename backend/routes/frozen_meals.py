@@ -54,10 +54,16 @@ def create_frozen_meal():
         recipe = Recipe.query.get_or_404(data['recipe_id'])
         
         # Preparar dados para criação
+        measure_value = data.get('measure')
+        if measure_value and isinstance(measure_value, str) and measure_value.strip():
+            measure_value = measure_value.strip()
+        else:
+            measure_value = None
+            
         meal_data = {
             'recipe_id': data['recipe_id'],
             'portions': data['portions'],
-            'measure': data.get('measure'),
+            'measure': measure_value,
             'notes': data.get('notes'),
             'status': 'frozen'
         }
@@ -74,8 +80,16 @@ def create_frozen_meal():
         # Se foi especificada data de validade, usar ela
         if data.get('expiry_date'):
             try:
-                meal_data['expiry_date'] = datetime.fromisoformat(data['expiry_date']).date()
-            except:
+                expiry_str = data['expiry_date']
+                # Se já é uma string de data (YYYY-MM-DD), converter diretamente
+                if isinstance(expiry_str, str) and len(expiry_str) == 10:
+                    meal_data['expiry_date'] = datetime.strptime(expiry_str, '%Y-%m-%d').date()
+                else:
+                    meal_data['expiry_date'] = datetime.fromisoformat(expiry_str).date()
+            except Exception as e:
+                from flask import current_app
+                current_app.logger.warning(f"Error parsing expiry_date: {e}, value: {data.get('expiry_date')}")
+                # Se falhar, deixar None para o __init__ calcular automaticamente
                 pass
         
         # Criar refeição congelada (o __init__ calculará expiry_date se não foi fornecido)
@@ -87,7 +101,13 @@ def create_frozen_meal():
         return jsonify(frozen_meal.to_dict()), 201
     except Exception as e:
         db.session.rollback()
-        return jsonify({'error': str(e)}), 500
+        import traceback
+        from flask import current_app
+        error_trace = traceback.format_exc()
+        current_app.logger.error(f"Error creating frozen meal: {e}")
+        current_app.logger.error(f"Traceback: {error_trace}")
+        current_app.logger.error(f"Data received: {request.get_json()}")
+        return jsonify({'error': str(e), 'details': error_trace.split('\n')[-2] if error_trace else None}), 500
 
 
 @frozen_meals_bp.route('/frozen-meals/<int:id>', methods=['PUT'])

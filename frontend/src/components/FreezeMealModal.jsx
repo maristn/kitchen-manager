@@ -3,8 +3,12 @@ import { Snowflake, X } from 'lucide-react';
 
 const FreezeMealModal = ({ recipe, onConfirm, onCancel }) => {
   const [portions, setPortions] = useState(recipe?.servings || 1);
+  const [measure, setMeasure] = useState('');
   const [notes, setNotes] = useState('');
   const [expiryDate, setExpiryDate] = useState('');
+  
+  // Opções de medida para recipientes/potes
+  const containerMeasures = ['250ml', '500ml', '750ml', '1L', '1.5L', '2L', '250g', '500g', '1kg'];
   
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -17,6 +21,7 @@ const FreezeMealModal = ({ recipe, onConfirm, onCancel }) => {
     const data = {
       recipe_id: recipe.id,
       portions: parseInt(portions),
+      measure: measure && measure.trim() ? measure.trim() : null,
       notes: notes.trim() || null,
     };
     
@@ -65,6 +70,22 @@ const FreezeMealModal = ({ recipe, onConfirm, onCancel }) => {
         <p className="text-xs text-gray-500 mt-1">
           Receita padrão: {recipe?.servings || 1} porções
         </p>
+      </div>
+      
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          Medidas
+        </label>
+        <select
+          value={measure}
+          onChange={(e) => setMeasure(e.target.value)}
+          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+        >
+          <option value="">Selecione uma medida (opcional)...</option>
+          {containerMeasures.map(m => (
+            <option key={m} value={m}>{m}</option>
+          ))}
+        </select>
       </div>
       
       <div>

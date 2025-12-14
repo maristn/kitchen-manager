@@ -37,3 +37,7 @@ Thumbs.db
 # Build
 build/
 *.log
+
+# Logs
+logs/
+*.log.*
